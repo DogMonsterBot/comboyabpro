@@ -1,3 +1,4 @@
+from flask import Flask, request, jsonify
 from telethon import TelegramClient, events, Button
 import re
 
@@ -16,6 +17,9 @@ sponsor_channel = '@IntroductionofAirdrop'  # کانال اسپانسر
 
 # اتصال به تلگرام
 client = TelegramClient('session_name', api_id, api_hash).start(bot_token=bot_token)
+
+# ایجاد Flask app
+app = Flask(__name__)
 
 # تابع برای حذف لینک‌ها از متن
 def remove_links(text):
@@ -98,5 +102,21 @@ async def referral_link(event):
 async def support(event):
     await event.answer("📩 برای پشتیبانی به @A19_8_1994 مراجعه کنید.")
 
+# ایجاد یک endpoint برای API
+@app.route('/api/message', methods=['POST'])
+def send_message():
+    data = request.json
+    chat_id = data.get('chat_id')
+    message = data.get('message')
+
+    if not chat_id or not message:
+        return jsonify({'error': 'چت ID و پیام ضروری هستند.'}), 400
+
+    # ارسال پیام به کاربر
+    client.loop.run_until_complete(client.send_message(chat_id, message))
+    return jsonify({'success': 'پیام با موفقیت ارسال شد.'}), 200
+
 # اجرای ربات
-client.run_until_disconnected()
+if __name__ == '__main__':
+    client.start()
+    app.run(host='0.0.0.0', port=5000)  # API را روی پورت 5000 اجرا کنید
