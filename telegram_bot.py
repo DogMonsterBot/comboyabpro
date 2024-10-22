@@ -3,8 +3,8 @@ from telethon import TelegramClient, events, Button
 import re
 
 # اطلاعات API تلگرام شما
-api_id = 'YOUR_API_ID'
-api_hash = 'YOUR_API_HASH'
+api_id = 123456  # اینجا را با API ID واقعی خود پر کنید
+api_hash = 'abcdef1234567890abcdef1234567890'  # اینجا را با API Hash واقعی خود پر کنید
 bot_token = '7717941076:AAEcwFEbve3HjqSfTJHZLax68JOEceItMQk'
 
 # لیست کانال‌های مبدا
