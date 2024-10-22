@@ -1,0 +1,46 @@
+2024-10-23 00:56:40,778 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://10.2.0.2:5000
+2024-10-23 00:56:40,780 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2024-10-23 00:58:38,424 - werkzeug - INFO - 127.0.0.1 - - [23/Oct/2024 00:58:38] "[33mGET / HTTP/1.1[0m" 404 -
+2024-10-23 00:58:38,516 - werkzeug - INFO - 127.0.0.1 - - [23/Oct/2024 00:58:38] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2024-10-23 01:02:12,151 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://10.2.0.2:5000
+2024-10-23 01:02:12,155 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2024-10-23 01:09:21,191 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://10.2.0.2:5000
+2024-10-23 01:09:21,193 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2024-10-23 01:12:13,247 - telethon.network.mtprotosender - INFO - Connecting to 149.154.167.51:443/TcpFull...
+2024-10-23 01:12:16,211 - telethon.network.mtprotosender - INFO - Connection to 149.154.167.51:443/TcpFull complete!
+2024-10-23 01:12:19,809 - __main__ - ERROR - خطای حیاتی: The api_id/api_hash combination is invalid (caused by ImportBotAuthorizationRequest)
+2024-10-23 01:17:14,604 - telethon.network.mtprotosender - INFO - Connecting to 149.154.167.51:443/TcpFull...
+2024-10-23 01:17:14,877 - telethon.network.mtprotosender - INFO - Connection to 149.154.167.51:443/TcpFull complete!
+2024-10-23 01:17:18,321 - __main__ - ERROR - خطای حیاتی: The api_id/api_hash combination is invalid (caused by ImportBotAuthorizationRequest)
+2024-10-23 01:20:44,704 - __main__ - ERROR - خطای حیاتی: Your API ID or Hash cannot be empty or None. Refer to telethon.rtfd.io for more information.
+2024-10-23 01:20:52,648 - __main__ - ERROR - خطای حیاتی: Your API ID or Hash cannot be empty or None. Refer to telethon.rtfd.io for more information.
+2024-10-23 01:21:59,064 - __main__ - ERROR - خطای حیاتی: Your API ID or Hash cannot be empty or None. Refer to telethon.rtfd.io for more information.
+2024-10-23 01:30:23,712 - __main__ - ERROR - خطای حیاتی: Your API ID or Hash cannot be empty or None. Refer to telethon.rtfd.io for more information.
+2024-10-23 01:30:38,495 - __main__ - ERROR - خطای حیاتی: Your API ID or Hash cannot be empty or None. Refer to telethon.rtfd.io for more information.
+2024-10-23 01:31:14,827 - __main__ - ERROR - خطای حیاتی: Your API ID or Hash cannot be empty or None. Refer to telethon.rtfd.io for more information.
+2024-10-23 01:33:11,238 - __main__ - ERROR - خطای حیاتی: name 'client' is not defined
+2024-10-23 01:33:29,876 - __main__ - ERROR - خطای حیاتی: module 'http.client' has no attribute 'on'
+2024-10-23 01:34:41,467 - __main__ - ERROR - خطای حیاتی: 'NoneType' object has no attribute 'on'
+2024-10-23 01:35:45,753 - __main__ - INFO - این کد برای نمایش ساختار است و بدون اتصال به API کار نخواهد کرد.
+2024-10-23 01:35:51,473 - __main__ - INFO - این کد برای نمایش ساختار است و بدون اتصال به API کار نخواهد کرد.
+2024-10-23 01:36:01,212 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://10.2.0.2:5000
+2024-10-23 01:36:01,212 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2024-10-23 01:37:46,308 - werkzeug - INFO - 127.0.0.1 - - [23/Oct/2024 01:37:46] "[33mGET / HTTP/1.1[0m" 404 -
+2024-10-23 01:44:52,714 - __main__ - INFO - این کد برای نمایش ساختار است و بدون اتصال به API کار نخواهد کرد.
+2024-10-23 01:45:02,416 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://10.2.0.2:5000
+2024-10-23 01:45:02,416 - werkzeug - INFO - [33mPress CTRL+C to quit[0m

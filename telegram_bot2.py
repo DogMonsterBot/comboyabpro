@@ -1,104 +1,114 @@
 from flask import Flask, request, jsonify
 from telethon import events, Button
-from telethon.errors import UserNotParticipantError
-import re
 import logging
-from telegram import Bot  # Import Telegram Bot
+import os
+import re
+from dataclasses import dataclass
+from dotenv import load_dotenv
 
-# Configure logging
+# بارگذاری متغیرهای محیطی از فایل .env
+load_dotenv()
+
+# تنظیمات لاگینگ
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('bot.log', encoding='utf-8'),
+        logging.StreamHandler()  # فقط چاپ در کنسول
+    ]
 )
 logger = logging.getLogger(__name__)
 
-# Bot configuration
-BOT_TOKEN = "7717941076:AAEcwFEbve3HjqSfTJHZLax68JOEceItMQk"
+# تنظیمات اصلی بات
+BOT_TOKEN = os.getenv('BOT_TOKEN')
 
-# Channel configurations
+if BOT_TOKEN is None:
+    raise ValueError("BOT_TOKEN must be set in the .env file.")
+
 SOURCE_CHANNELS = ['@gemz_combo_daily', '@MemefiCode', '@DogMonster']
 TARGET_CHANNEL = '@IntroductionofAirdrop'
 SPONSOR_CHANNEL = '@IntroductionofAirdrop'
+ADMIN_USERS = []  # شناسه‌های عددی ادمین‌ها را اینجا قرار دهید
 
-# Initialize Flask and Telegram bot
-app = Flask(__name__)
-bot = Bot(token=BOT_TOKEN)
+@dataclass
+class BotConfig:
+    """کلاس تنظیمات بات"""
+    bot_token: str
+    source_channels: list
+    target_channel: str
+    sponsor_channel: str
+    admin_users: list
 
 class MessageHandler:
+    """مدیریت پردازش و تمیزسازی پیام‌ها"""
+    
     @staticmethod
-    def remove_links(text):
-        """Remove URLs from text while preserving other content"""
+    def sanitize_message(text: str) -> str:
         if not text:
             return ""
-        return re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', '', text)
-
-    @staticmethod
-    def sanitize_message(text):
-        """Sanitize message content"""
-        if not text:
-            return ""
-        text = re.sub(r'<[^>]*>', '', text)  # Remove potential HTML/script injection
+        text = re.sub(r'<[^>]*>', '', text)
+        text = ' '.join(text.split())
         return text.strip()
-
-class UserManager:
+        
     @staticmethod
-    async def check_membership(user_id, channel):
-        """Check if user is a member of the specified channel"""
+    def remove_links(text: str) -> str:
+        if not text:
+            return ""
+        return re.sub(r'http[s]?://\S+', '', text)
+
+class BotCallbacks:
+    """مدیریت کالبک‌ها و دستورات بات"""
+    
+    def __init__(self, config: BotConfig):
+        self.config = config
+        
+    async def handle_start(self, event) -> None:
         try:
-            async with client:
-                await client.get_participant(channel, user_id)
-            return True
-        except UserNotParticipantError:
-            return False
+            user = await event.get_sender()
+            welcome_msg = (
+                f"👋 سلام {user.first_name}!\n\n"
+                "برای دسترسی به ربات، لطفاً در کانال اسپانسر ما عضو شوید."
+            )
+            
+            buttons = [
+                [Button.url('عضویت در کانال اسپانسر', 
+                           f'https://t.me/{self.config.sponsor_channel}')],
+                [Button.inline('تأیید عضویت', 'verify_membership')]
+            ]
+            
+            await event.respond(welcome_msg, buttons=buttons)
+            
         except Exception as e:
-            logger.error(f"Error checking membership: {e}")
-            return False
+            logger.error(f"خطا در مدیریت start: {e}")
+            await event.respond("متأسفانه خطایی رخ داد. لطفاً بعداً تلاش کنید.")
 
-# Event Handlers
-@app.route('/start', methods=['POST'])
-def start_handler():
-    """Handle /start command"""
+def main():
     try:
-        data = request.get_json()
-        user_id = data.get('user_id')
-        welcome_message = f"👋 سلام!\n\nبرای دسترسی به ربات، لطفاً در کانال اسپانسر ما عضو شوید."
+        config = BotConfig(
+            bot_token=BOT_TOKEN,
+            source_channels=SOURCE_CHANNELS,
+            target_channel=TARGET_CHANNEL,
+            sponsor_channel=SPONSOR_CHANNEL,
+            admin_users=ADMIN_USERS
+        )
         
-        bot.send_message(user_id, welcome_message)
-        bot.send_message(user_id, "لینک عضویت در کانال اسپانسر: https://t.me/{}".format(SPONSOR_CHANNEL))
+        app = Flask(__name__)
+        
+        # در اینجا دیگر از TelegramClient استفاده نمی‌شود
+        logger.info("این کد برای نمایش ساختار است و بدون اتصال به API کار نخواهد کرد.")
+        
+        # در اینجا می‌توانید از Flask برای راه‌اندازی یک سرور ساده استفاده کنید
+
+        @app.route('/start', methods=['GET'])
+        def start():
+            return "این یک ربات تلگرام بدون اتصال به API است."
+        
+        app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
         
     except Exception as e:
-        logger.error(f"Error in start handler: {e}")
-        return jsonify({"error": "متأسفانه خطایی رخ داد. لطفاً بعداً تلاش کنید."}), 500
-
-@app.route('/message', methods=['POST'])
-def message_handler():
-    """Handle incoming channel messages"""
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'No data provided'}), 400
-            
-        chat_id = data.get('chat_id')
-        message_text = data.get('message')
-        
-        if not chat_id or not message_text:
-            return jsonify({'error': 'Missing required fields'}), 400
-            
-        # Sanitize message
-        message_text = MessageHandler.sanitize_message(message_text)
-        
-        # Send message
-        bot.send_message(chat_id=TARGET_CHANNEL, text=message_text)
-        return jsonify({'success': True}), 200
-        
-    except Exception as e:
-        logger.error(f"API Error: {e}")
-        return jsonify({'error': 'Internal server error'}), 500
+        logger.error(f"خطای حیاتی: {e}")
+        raise
 
 if __name__ == '__main__':
-    # Run Flask app
-    app.run(
-        host='0.0.0.0',
-        port=5000,
-        ssl_context='adhoc'  # Enable HTTPS
-    )
+    main()
