@@ -1,113 +1,136 @@
-from flask import Flask, request, jsonify
-from telethon import events, Button
+from telethon import TelegramClient, events, Button
+from telethon.tl.functions.channels import JoinChannelRequest
+from telethon.sessions import StringSession
+import asyncio
 import logging
 import os
-import re
-from dataclasses import dataclass
-from dotenv import load_dotenv
 
-# بارگذاری متغیرهای محیطی از فایل .env
-load_dotenv()
-
-# تنظیمات لاگینگ
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('bot.log', encoding='utf-8'),
-        logging.StreamHandler()  # فقط چاپ در کنسول
-    ]
-)
+# Basic logging setup
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# تنظیمات اصلی بات
-BOT_TOKEN = os.getenv('BOT_TOKEN')
-
-if BOT_TOKEN is None:
-    raise ValueError("BOT_TOKEN must be set in the .env file.")
-
-SOURCE_CHANNELS = ['@gemz_combo_daily', '@MemefiCode', '@DogMonster']
-TARGET_CHANNEL = '@IntroductionofAirdrop'
-SPONSOR_CHANNEL = '@IntroductionofAirdrop'
-ADMIN_USERS = []  # شناسه‌های عددی ادمین‌ها را اینجا قرار دهید
-
-@dataclass
+# Bot Configuration
 class BotConfig:
-    """کلاس تنظیمات بات"""
-    bot_token: str
-    source_channels: list
-    target_channel: str
-    sponsor_channel: str
-    admin_users: list
-
-class MessageHandler:
-    """مدیریت پردازش و تمیزسازی پیام‌ها"""
+    # Session string (pre-generated)
+    SESSION = "1ApWapzMBu4s3KKd_2JSJ_5wKFWqGHkq2RG7_YWl54RWNv3H9k5PRuTavvvHZHqQYc7FYHBRypE8o7GiR6OzgSnG5Wx5zQOUqGVtoZC7ZQKGAXb5_DHSBDnYQYEJ8PdQLcNfr2l7BwO9vrcOLrmWKLkiEE_-6LVlBiHOIEyoBltQeJDbGkV7vFN6oVPhYPxVnGS7bIt_lAGM3zqqWSgm8RbZ3UlVH5JSB6UicRqTfLgxeJfN9o8jRBF28nz5X3PL_OB3c7pv-U30n-0NI6DnC2LfHJDhbQ0Xf9Dbo5ZpLyGQ6S7FSFvBSSTBYpjP94lhh9S0ZQcOmxFH3CqqSQXvx2YfQ0mHtbAM="
     
-    @staticmethod
-    def sanitize_message(text: str) -> str:
-        if not text:
-            return ""
-        text = re.sub(r'<[^>]*>', '', text)
-        text = ' '.join(text.split())
-        return text.strip()
-        
-    @staticmethod
-    def remove_links(text: str) -> str:
-        if not text:
-            return ""
-        return re.sub(r'http[s]?://\S+', '', text)
-
-class BotCallbacks:
-    """مدیریت کالبک‌ها و دستورات بات"""
+    # Telegram API credentials
+    API_ID = 27744450
+    API_HASH = "0f1f7f4014ebf82ccd3de56db56d96bc"
+    BOT_TOKEN = "7717941076:AAEcwFEbve3HjqSfTJHZLax68JOEceItMQk"
     
-    def __init__(self, config: BotConfig):
-        self.config = config
+    # Channel and admin configurations
+    CHANNELS = {
+        'source': ['@gemz_combo_daily', '@MemefiCode', '@DogMonster'],
+        'target': '@IntroductionofAirdrop',
+        'required': ['@IntroductionofAirdrop']
+    }
+    
+    ADMIN_IDS = [6505786158]  # Admin user IDs
+    
+    # Button configurations
+    BUTTONS = {
+        'start': [
+            [Button.url('کانال اصلی', 'https://t.me/IntroductionofAirdrop')],
+            [Button.inline('تایید عضویت ✅', 'verify')]
+        ],
+        'verified': [
+            [Button.inline('دسترسی به ربات 🤖', 'menu')]
+        ]
+    }
+    
+    # Message templates
+    MESSAGES = {
+        'welcome': """
+👋 سلام به ربات خوش آمدید!
+
+برای استفاده از ربات مراحل زیر را انجام دهید:
+1. عضو کانال شوید
+2. روی دکمه تایید عضویت کلیک کنید
+3. از امکانات ربات استفاده کنید
+        """,
+        'verified': "✅ عضویت شما تایید شد! اکنون می‌توانید از ربات استفاده کنید.",
+        'not_verified': "❌ لطفا ابتدا در کانال‌های ما عضو شوید."
+    }
+
+class TelegramBot:
+    def __init__(self):
+        self.config = BotConfig
+        self.client = TelegramClient(
+            StringSession(self.config.SESSION),
+            self.config.API_ID,
+            self.config.API_HASH
+        )
+    
+    async def start(self):
+        """Start the bot"""
+        await self.client.start(bot_token=self.config.BOT_TOKEN)
         
-    async def handle_start(self, event) -> None:
-        try:
-            user = await event.get_sender()
-            welcome_msg = (
-                f"👋 سلام {user.first_name}!\n\n"
-                "برای دسترسی به ربات، لطفاً در کانال اسپانسر ما عضو شوید."
+        # Register handlers
+        self.register_handlers()
+        
+        # Run the bot
+        await self.client.run_until_disconnected()
+    
+    def register_handlers(self):
+        """Register message and callback handlers"""
+        
+        @self.client.on(events.NewMessage(pattern='/start'))
+        async def start_handler(event):
+            await event.respond(
+                self.config.MESSAGES['welcome'],
+                buttons=self.config.BUTTONS['start']
             )
+        
+        @self.client.on(events.CallbackQuery(pattern='verify'))
+        async def verify_handler(event):
+            user_id = event.sender_id
             
-            buttons = [
-                [Button.url('عضویت در کانال اسپانسر', 
-                           f'https://t.me/{self.config.sponsor_channel}')],
-                [Button.inline('تأیید عضویت', 'verify_membership')]
-            ]
-            
-            await event.respond(welcome_msg, buttons=buttons)
-            
-        except Exception as e:
-            logger.error(f"خطا در مدیریت start: {e}")
-            await event.respond("متأسفانه خطایی رخ داد. لطفاً بعداً تلاش کنید.")
+            # Check channel memberships
+            try:
+                for channel in self.config.CHANNELS['required']:
+                    participant = await self.client.get_participant(channel, user_id)
+                    if not participant:
+                        await event.answer(self.config.MESSAGES['not_verified'])
+                        return
+                
+                # If verified, show success message
+                await event.edit(
+                    self.config.MESSAGES['verified'],
+                    buttons=self.config.BUTTONS['verified']
+                )
+                
+            except Exception as e:
+                logger.error(f"Verification error: {e}")
+                await event.answer("خطا در بررسی عضویت. لطفا دوباره تلاش کنید.")
+        
+        @self.client.on(events.NewMessage(chats=self.config.CHANNELS['source']))
+        async def forward_handler(event):
+            try:
+                # Forward message to target channel
+                await self.client.forward_messages(
+                    self.config.CHANNELS['target'],
+                    event.message
+                )
+            except Exception as e:
+                logger.error(f"Forward error: {e}")
+
+        @self.client.on(events.CallbackQuery(pattern='menu'))
+        async def menu_handler(event):
+            channel_link = f"https://t.me/{self.config.CHANNELS['target'][1:]}"
+            await event.edit(
+                "🤖 به منوی ربات خوش آمدید!\n\n"
+                "از این پس پیام‌های کانال‌های منبع به صورت خودکار در کانال مقصد ارسال خواهند شد.",
+                buttons=[[Button.url('کانال مقصد', channel_link)]]
+            )
 
 def main():
+    """Main function to run the bot"""
     try:
-        config = BotConfig(
-            bot_token=BOT_TOKEN,
-            source_channels=SOURCE_CHANNELS,
-            target_channel=TARGET_CHANNEL,
-            sponsor_channel=SPONSOR_CHANNEL,
-            admin_users=ADMIN_USERS
-        )
-        
-        app = Flask(__name__)
-        
-        # در اینجا دیگر از TelegramClient استفاده نمی‌شود
-        logger.info("این کد برای نمایش ساختار است و بدون اتصال به API کار نخواهد کرد.")
-        
-        # در اینجا می‌توانید از Flask برای راه‌اندازی یک سرور ساده استفاده کنید
-
-        @app.route('/start', methods=['GET'])
-        def start():
-            return "این یک ربات تلگرام بدون اتصال به API است."
-        
-        app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
-        
+        bot = TelegramBot()
+        asyncio.run(bot.start())
     except Exception as e:
-        logger.error(f"خطای حیاتی: {e}")
+        logger.error(f"Critical error: {e}")
         raise
 
 if __name__ == '__main__':
