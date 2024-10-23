@@ -1,6 +1,7 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, filters, MessageHandler as TgMessageHandler
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, MessageHandler as TelegramMessageHandler, filters
 import logging
+import os
 import re
 from typing import List
 from dataclasses import dataclass
@@ -9,7 +10,10 @@ from dataclasses import dataclass
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[logging.FileHandler('bot.log'), logging.StreamHandler()]
+    handlers=[
+        logging.FileHandler('bot.log'),
+        logging.StreamHandler()
+    ]
 )
 logger = logging.getLogger(__name__)
 
@@ -22,90 +26,206 @@ class BotConfig:
     sponsor_channel: str
     admin_users: List[int]
 
-class MessageProcessor:
-    """مدیریت پردازش پیام‌ها"""
+class CustomMessageHandler:
+    """مدیریت پردازش و تمیزسازی پیام‌ها"""
     
     @staticmethod
     def sanitize_message(text: str) -> str:
-        """تمیزسازی و حذف تگ‌ها"""
-        return ' '.join(re.sub(r'<[^>]*>', '', text or '').split()).strip()
-
+        """تمیزسازی و اعتبارسنجی محتوای پیام"""
+        if not text:
+            return ""
+        text = re.sub(r'<[^>]*>', '', text)
+        text = ' '.join(text.split())
+        return text.strip()
+        
     @staticmethod
     def remove_links(text: str) -> str:
-        """حذف لینک‌ها"""
-        return re.sub(r'http[s]?://\S+', '', text or '')
+        """حذف URL‌ها با حفظ سایر محتوا"""
+        if not text:
+            return ""
+        return re.sub(r'http[s]?://\S+', '', text)
 
 class TelegramBot:
     def __init__(self, config: BotConfig):
         self.config = config
         self.application = ApplicationBuilder().token(config.bot_token).build()
+        
+        # دیکشنری برای ذخیره اطلاعات کاربران
+        self.user_data = {
+            7060539098: {'score': 50, 'invites': 5},  # مثال: شناسه کاربر و اطلاعات مربوطه
+            # می‌توانید کاربرهای بیشتری به این دیکشنری اضافه کنید
+        }
+        
+    async def get_user_score(self, user_id: int) -> int:
+        """دریافت امتیاز کاربر بر اساس شناسه"""
+        return self.user_data.get(user_id, {}).get('score', 0)
 
-    def build_keyboard(self):
-        """ساخت دکمه‌های کیبورد"""
-        return InlineKeyboardMarkup([
-            [InlineKeyboardButton("عضویت در کانال اسپانسر", url=f'https://t.me/{self.config.sponsor_channel.replace("@", "")}')],
-            [InlineKeyboardButton("تأیید عضویت", callback_data='verify_membership')]
-        ])
+    async def get_invites_count(self, user_id: int) -> int:
+        """دریافت تعداد دعوت‌شدگان کاربر بر اساس شناسه"""
+        return self.user_data.get(user_id, {}).get('invites', 0)
 
-    async def start_command(self, update: Update, _):
+    async def check_score(self, update: Update, context) -> None:
+        query = update.callback_query
+
+        if not query:
+            logger.warning("پیام وجود ندارد در check_score")
+            return
+
+        user_id = query.from_user.id
+        user_score = await self.get_user_score(user_id)  # دریافت امتیاز کاربر
+        invites_count = await self.get_invites_count(user_id)  # دریافت تعداد دعوت‌ها
+
+        # ایجاد دکمه‌ها
+        keyboard = [
+            [InlineKeyboardButton("دریافت لینک ارجاع", callback_data='get_referral_link')],
+            [InlineKeyboardButton("تعداد دعوت‌شدگان: " + str(invites_count), callback_data='show_invites')]
+        ]
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.answer()  # پاسخ به کلیک دکمه
+        await query.message.reply_text(
+            text=f"امتیاز شما: {user_score}\n",
+            reply_markup=reply_markup
+        )
+
+    async def get_referral_link(self, update: Update, context) -> None:
+        user_id = update.effective_user.id
+        referral_link = f"https://t.me/your_bot?start={user_id}"  # لینک ارجاع کاربر
+        await update.callback_query.answer()  # پاسخ به کلیک دکمه
+        await update.callback_query.message.reply_text(
+            text=f"لینک ارجاع شما: {referral_link}\nبه هر کاربر که با این لینک عضو شود، 10 امتیاز دریافت می‌کنید."
+        )
+
+    async def start_command(self, update: Update, context):
         """مدیریت دستور /start"""
         try:
+            keyboard = [
+                [InlineKeyboardButton("عضویت در کانال اسپانسر", 
+                                    url=f'https://t.me/{self.config.sponsor_channel.replace("@", "")}')],
+                [InlineKeyboardButton("تأیید عضویت", callback_data='verify_membership')]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
             await update.message.reply_text(
                 f"👋 سلام {update.effective_user.first_name}!\n\n"
                 "برای دسترسی به ربات، لطفاً در کانال اسپانسر ما عضو شوید.",
-                reply_markup=self.build_keyboard()
+                reply_markup=reply_markup
             )
+            
         except Exception as e:
             logger.error(f"خطا در مدیریت start: {e}")
-            await update.message.reply_text("خطایی رخ داد. لطفاً بعداً تلاش کنید.")
+            await update.message.reply_text("متأسفانه خطایی رخ داد. لطفاً بعداً تلاش کنید.")
 
-    async def verify_membership(self, update: Update, _):
+    async def verify_membership(self, update: Update, context):
         """بررسی عضویت کاربر"""
         try:
-            await update.callback_query.answer("عضویت شما با موفقیت تأیید شد!")
+            query = update.callback_query
+            user_id = query.from_user.id
+            
+            # بررسی اینکه کاربر به کانال عضو شده است
+            try:
+                member = await context.bot.get_chat_member(chat_id=self.config.sponsor_channel, user_id=user_id)
+                if member.status in ['member', 'administrator', 'creator']:
+                    # ایجاد دکمه‌ها برای تعامل
+                    keyboard = self.create_new_keyboard(user_id)
+
+                    # ارسال پیام جدید با دکمه‌ها
+                    await query.message.reply_text(
+                        text="🎉 از شما بابت عضویت متشکرم! حالا می‌توانید دکمه را فشار دهید یا رتبه‌بندی خود را بررسی کنید.",
+                        reply_markup=keyboard
+                    )
+                else:
+                    # ایجاد دکمه‌های عضویت
+                    keyboard = InlineKeyboardMarkup(inline_keyboard=[ 
+                        [InlineKeyboardButton(text='عضویت در کانال', url='https://t.me/IntroductionofAirdrop')],
+                        [InlineKeyboardButton(text='بررسی عضویت', callback_data='check_subscription')]
+                    ])
+                    await query.answer(text="خوش آمدید! لطفاً به کانال بپیوندید و سپس عضویت خود را بررسی کنید.", reply_markup=keyboard)
+            except Exception as e:
+                logger.error(f"خطا در تأیید عضویت: {e}")
+                await query.answer("امکان تأیید عضویت وجود ندارد. لطفاً مطمئن شوید که ربات ادمین کانال است و دوباره تلاش کنید.")
+        
         except Exception as e:
             logger.error(f"خطا در تأیید عضویت: {e}")
-            await update.callback_query.answer("خطا رخ داد.")
+            await query.answer("خطایی رخ داد. لطفاً دوباره تلاش کنید.")
 
     async def forward_message(self, update: Update, context):
-        """ارسال پیام‌های فوروارد شده"""
+        """مدیریت ارسال مجدد پیام‌ها"""
         try:
             message = update.message
-            if not message or message.chat.username not in [ch.replace("@", "") for ch in self.config.source_channels]:
+            if not message:
                 return
+
+            # بررسی اینکه پیام از کانال‌های منبع است
+            if str(message.chat.username) not in [channel.replace("@", "") for channel in self.config.source_channels]:
+                return
+
+            text = CustomMessageHandler.remove_links(message.text or message.caption or "")
+            text = CustomMessageHandler.sanitize_message(text)
             
-            text = MessageProcessor.remove_links(message.text or message.caption)
-            text = MessageProcessor.sanitize_message(text)
-
-            kwargs = {"caption": f"{text}\n\nاز: @{message.chat.username}"}
-
+            # ارسال به کانال مقصد
             if message.photo:
-                await context.bot.send_photo(self.config.target_channel, photo=message.photo[-1].file_id, **kwargs)
+                await context.bot.send_photo(
+                    self.config.target_channel,
+                    photo=message.photo[-1].file_id,
+                    caption=f"{text}\n\nاز: @{message.chat.username}"
+                )
             elif message.video:
-                await context.bot.send_video(self.config.target_channel, video=message.video.file_id, **kwargs)
+                await context.bot.send_video(
+                    self.config.target_channel,
+                    video=message.video.file_id,
+                    caption=f"{text}\n\nاز: @{message.chat.username}"
+                )
             else:
-                await context.bot.send_message(self.config.target_channel, f"{text}\n\nاز: @{message.chat.username}")
+                await context.bot.send_message(
+                    self.config.target_channel,
+                    f"{text}\n\nاز: @{message.chat.username}"
+                )
+                
         except Exception as e:
             logger.error(f"خطا در ارسال پیام: {e}")
 
+    def create_new_keyboard(self, user_id):
+        """ایجاد دکمه‌های جدید (این تابع باید بر اساس نیاز شما نوشته شود)"""
+        return InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text='بررسی امتیاز من', callback_data=f'check_rating_{user_id}')],
+            [InlineKeyboardButton(text='درباره ربات', callback_data='about_bot')]
+        ])
+
     def run(self):
         """راه‌اندازی بات"""
-        self.application.add_handler(CommandHandler('start', self.start_command))
-        self.application.add_handler(CallbackQueryHandler(self.verify_membership, pattern='^verify_membership$'))
-        self.application.add_handler(TgMessageHandler(filters.ALL, self.forward_message))
-
-        logger.info("بات در حال اجرا است...")
-        self.application.run_polling()
+        try:
+            # افزودن هندلرها
+            self.application.add_handler(CommandHandler('start', self.start_command))
+            self.application.add_handler(CallbackQueryHandler(self.verify_membership, 
+                                                           pattern='^verify_membership$'))
+            self.application.add_handler(CallbackQueryHandler(self.check_score, 
+                                                           pattern='^check_rating_'))
+            self.application.add_handler(CallbackQueryHandler(self.get_referral_link, 
+                                                           pattern='get_referral_link'))
+            self.application.add_handler(TelegramMessageHandler(filters.ALL, self.forward_message))
+            
+            # شروع پولینگ
+            logger.info("بات در حال اجرا است...")
+            self.application.run_polling()
+            
+        except Exception as e:
+            logger.error(f"خطای حیاتی: {e}")
+            raise
 
 def main():
+    """تابع اصلی برنامه"""
+    # تنظیمات بات
     config = BotConfig(
-        bot_token="7717941076:AAEcwFEbve3HjqSfTJHZLax68JOEceItMQk",  # توکن جدید شما
+        bot_token="7717941076:AAEcwFEbve3HjqSfTJHZLax68JOEceItMQk",
         source_channels=['@gemz_combo_daily', '@MemefiCode', '@AirDropTelegramProChat'],
         target_channel='@IntroductionofAirdrop',
         sponsor_channel='@IntroductionofAirdrop',
         admin_users=[7060539098]
     )
     
+    # ایجاد و اجرای بات
     bot = TelegramBot(config)
     bot.run()
 
