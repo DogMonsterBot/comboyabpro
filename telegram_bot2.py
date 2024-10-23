@@ -65,29 +65,30 @@ class TelegramBot:
         return self.user_data.get(user_id, {}).get('invites', 0)
 
     async def check_score(self, update: Update, context) -> None:
-        query = update.callback_query
-
-        if not query:
-            logger.warning("پیام وجود ندارد در check_score")
-            return
-
-        user_id = query.from_user.id
+        user_id = update.effective_user.id
         user_score = await self.get_user_score(user_id)  # دریافت امتیاز کاربر
         invites_count = await self.get_invites_count(user_id)  # دریافت تعداد دعوت‌ها
 
         # ایجاد دکمه‌ها
         keyboard = [
             [InlineKeyboardButton("دریافت لینک ارجاع", callback_data='get_referral_link')],
-            [InlineKeyboardButton("تعداد دعوت‌شدگان: " + str(invites_count), callback_data='show_invites')]
+            [InlineKeyboardButton("تعداد دعوت‌شدگان: " + str(invites_count), callback_data='show_invites')],
+            [InlineKeyboardButton("برگشت", callback_data='back')]
         ]
         
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await query.answer()  # پاسخ به کلیک دکمه
-        await query.message.reply_text(
-            text=f"امتیاز شما: {user_score}\n",
-            reply_markup=reply_markup
-        )
+        if update.message:
+            await update.message.reply_text(
+                text=f"امتیاز شما: {user_score}\n",
+                reply_markup=reply_markup
+            )
+        else:
+            await update.callback_query.answer()  # پاسخ به کلیک دکمه
+            await update.callback_query.message.reply_text(
+                text=f"امتیاز شما: {user_score}\n",
+                reply_markup=reply_markup
+            )
 
     async def get_referral_link(self, update: Update, context) -> None:
         user_id = update.effective_user.id
@@ -130,6 +131,9 @@ class TelegramBot:
                     # ایجاد دکمه‌ها برای تعامل
                     keyboard = self.create_new_keyboard(user_id)
 
+                    # حذف پیام قبلی
+                    await query.message.delete()
+
                     # ارسال پیام جدید با دکمه‌ها
                     await query.message.reply_text(
                         text="🎉 از شما بابت عضویت متشکرم! حالا می‌توانید دکمه را فشار دهید یا رتبه‌بندی خود را بررسی کنید.",
@@ -155,15 +159,17 @@ class TelegramBot:
         try:
             message = update.message
             if not message:
+                logger.warning("پیام وجود ندارد در forward_message")
                 return
 
             # بررسی اینکه پیام از کانال‌های منبع است
             if str(message.chat.username) not in [channel.replace("@", "") for channel in self.config.source_channels]:
+                logger.warning(f"پیام از کانال غیرمجاز: {message.chat.username}")
                 return
 
             text = CustomMessageHandler.remove_links(message.text or message.caption or "")
             text = CustomMessageHandler.sanitize_message(text)
-            
+
             # ارسال به کانال مقصد
             if message.photo:
                 await context.bot.send_photo(
@@ -183,40 +189,71 @@ class TelegramBot:
                     f"{text}\n\nاز: @{message.chat.username}"
                 )
                 
+            logger.info(f"پیام از {message.chat.username} به {self.config.target_channel} ارسال شد.")
+            
         except Exception as e:
             logger.error(f"خطا در ارسال پیام: {e}")
 
     def create_new_keyboard(self, user_id):
-        """ایجاد دکمه‌های جدید (این تابع باید بر اساس نیاز شما نوشته شود)"""
+        """ایجاد دکمه‌های جدید"""
         return InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text='بررسی امتیاز من', callback_data=f'check_rating_{user_id}')],
-            [InlineKeyboardButton(text='درباره ربات', callback_data='about_bot')]
+            [InlineKeyboardButton(text='درباره ربات', callback_data='about_bot')],
+            [InlineKeyboardButton(text='برگشت', callback_data='back')]
         ])
 
-    def run(self):
-        """راه‌اندازی بات"""
-        try:
-            # افزودن هندلرها
-            self.application.add_handler(CommandHandler('start', self.start_command))
-            self.application.add_handler(CallbackQueryHandler(self.verify_membership, 
-                                                           pattern='^verify_membership$'))
-            self.application.add_handler(CallbackQueryHandler(self.check_score, 
-                                                           pattern='^check_rating_'))
-            self.application.add_handler(CallbackQueryHandler(self.get_referral_link, 
-                                                           pattern='get_referral_link'))
-            self.application.add_handler(TelegramMessageHandler(filters.ALL, self.forward_message))
-            
-            # شروع پولینگ
-            logger.info("بات در حال اجرا است...")
-            self.application.run_polling()
-            
-        except Exception as e:
-            logger.error(f"خطای حیاتی: {e}")
-            raise
+    async def about_bot(self, update: Update, context):
+        """مدیریت دکمه درباره ربات"""
+        about_text = (
+            "🤖 درباره ربات:\n"
+            "این ربات به شما کمک می‌کند تا به راحتی از امتیازها و لینک‌های ارجاع خود باخبر شوید.\n"
+            "شما می‌توانید:\n"
+            "- کامبو های روزانه به صورت خودکار دریافت  خواهد شد\n"
+            "- لینک ارجاع دریافت کنید و دوستان خود را دعوت کنید\n"
+            "- از طریق عضویت در کانال اسپانسر، امتیاز بیشتری کسب کنید.\n"
+            "\n"
+            "برای اطلاعات بیشتر می‌توانید باارسال پیام به ای دی @A19_8_1994 ما تماس بگیرید."
+        )
+        
+        await update.callback_query.answer()  # پاسخ به کلیک دکمه
+        
+        # حذف پیام قبلی
+        await update.callback_query.message.delete()
 
-def main():
-    """تابع اصلی برنامه"""
-    # تنظیمات بات
+        await update.callback_query.message.reply_text(about_text)
+
+    async def handle_back(self, update: Update, context):
+        """مدیریت دکمه برگشت"""
+        await update.callback_query.answer()
+        keyboard = self.create_new_keyboard(update.callback_query.from_user.id)
+
+        # حذف پیام قبلی
+        await update.callback_query.message.delete()
+
+        await update.callback_query.message.reply_text(
+            text="لطفاً گزینه مورد نظر را انتخاب کنید:",
+            reply_markup=keyboard
+        )
+
+    def run(self):
+        """اجرای ربات"""
+        try:
+            # ثبت دستورات
+            self.application.add_handler(CommandHandler("start", self.start_command))
+            self.application.add_handler(CallbackQueryHandler(self.verify_membership, pattern='verify_membership'))
+            self.application.add_handler(CallbackQueryHandler(self.check_score, pattern='check_rating_'))
+            self.application.add_handler(CallbackQueryHandler(self.get_referral_link, pattern='get_referral_link'))
+            self.application.add_handler(CallbackQueryHandler(self.about_bot, pattern='about_bot'))
+            self.application.add_handler(CallbackQueryHandler(self.handle_back, pattern='back'))
+            self.application.add_handler(CallbackQueryHandler(self.forward_message, filters.TEXT & ~filters.COMMAND))
+            self.application.add_handler(TelegramMessageHandler(filters.TEXT & ~filters.COMMAND, self.forward_message))
+
+            logger.info("ربات در حال اجراست...")
+            self.application.run_polling()
+        except Exception as e:
+            logger.error(f"خطا در راه‌اندازی ربات: {e}")
+
+if __name__ == "__main__":
     config = BotConfig(
         bot_token="7717941076:AAEcwFEbve3HjqSfTJHZLax68JOEceItMQk",
         source_channels=['@gemz_combo_daily', '@MemefiCode', '@AirDropTelegramProChat'],
@@ -225,9 +262,5 @@ def main():
         admin_users=[7060539098]
     )
     
-    # ایجاد و اجرای بات
     bot = TelegramBot(config)
     bot.run()
-
-if __name__ == '__main__':
-    main()
